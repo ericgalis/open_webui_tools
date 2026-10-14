@@ -40,7 +40,7 @@ PDFs, text), Gmail, Calendar, Contacts and Tasks**.
 ### 2. Sidecar
 
 ```bash
-cd ~/code/owui_google_reader
+cd ~/code/openwebui_tools/owui_google_reader
 cp .env.example .env && chmod 600 .env
 python3 -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"  # → TOKEN_ENCRYPTION_KEY
 openssl rand -hex 32                                                                       # → SIDECAR_API_KEY
@@ -58,7 +58,7 @@ tokens can't be read, and users just re-link.
 
 ### 3. Open WebUI tool
 
-1. **Workspace → Tools → +** and paste `openwebui_tool/google_workspace_reader.py`. Save.
+1. **Workspace → Tools → Import** and choose `../google_workspace_reader.json` (repo root, next to the other tools). Save.
 2. Tool **⚙ Valves**: set `SIDECAR_API_KEY` to the same value as in `.env`. Leave `SIDECAR_URL` as is.
 3. Control who gets it: set tool access to the users or groups who should have it, then enable it on
    the models you want (Workspace → Models → *model* → Tools), or per chat via the ＋ menu.
