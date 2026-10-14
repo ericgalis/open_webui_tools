@@ -1,0 +1,23 @@
+# github-tool sidecar for Open WebUI. Holds the GitHub token so Open WebUI never does.
+#   docker compose up -d --build
+services:
+  github-tool:
+    build: ./sidecar
+    image: github-tool:local
+    container_name: github-tool
+    restart: unless-stopped
+    env_file: .env
+    # No published ports: only reachable from the dmz network (Open WebUI) at http://github-tool:8000
+    networks:
+      - dmz
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  dmz:
+    external: true
