@@ -1,0 +1,31 @@
+# google-reader sidecar for Open WebUI. Holds Google OAuth credentials so Open WebUI never does.
+#   docker compose up -d --build
+services:
+  google-reader:
+    build: ./sidecar
+    image: google-reader:local
+    container_name: google-reader
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - google-reader-data:/data
+    ports:
+      # Only the browser-facing link pages (container :8001) are published.
+      # The API (:8000) is reachable solely from the dmz network (Open WebUI).
+      - "${LINK_BIND_ADDR:-0.0.0.0}:${LINK_PORT:-8766}:8001"
+    networks:
+      - dmz
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  dmz:
+    external: true
+
+volumes:
+  google-reader-data:
