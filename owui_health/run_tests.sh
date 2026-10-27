@@ -26,6 +26,7 @@ docker run --rm --network "$net" -v "$PWD/tests:/seed:ro" -e PYTHONPATH=/app -e 
 
 docker run --rm --network "$net" --entrypoint sh -v "$PWD:/src:ro" \
   -v "$stack/food_constitution.json:/constitution.json:ro" -e HEALTH_CONSTITUTION=/constitution.json \
+  -v "$stack/healthingest/foodmatch.py:/foodmatch.py:ro" -e HEALTH_FOODMATCH=/foodmatch.py \
   -e HEALTH_TEST_RO_DSN="postgresql://health_tester_ro:ro@$net-db:5432/health_tester" -e PYTHONDONTWRITEBYTECODE=1 \
   ghcr.io/open-webui/open-webui:main -c \
   "pip install -q --disable-pip-version-check pytest==9.1.1 >/dev/null 2>&1; cd /src && python -m pytest -q -p no:cacheprovider --rootdir=/tmp tests $*"
