@@ -3,12 +3,16 @@
 Holds the GitHub token so Open WebUI never does. Listens on :8000 on the Docker network only
 (no published port). The Open WebUI tool authenticates with a shared API key and the Open
 WebUI user id. Reads work on any branch; writes only ever touch WRITE_BRANCH.
+
+With WORKSPACE_API_KEY set, the coding-agent runner (not Open WebUI) can also clone repos into and fetch them in
+/fast/workspace (app/workspace.py), with its own key.
 """
 
 import logging
 import os
 import secrets
 import sys
+from pathlib import Path
 
 import httpx
 import uvicorn
@@ -18,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from . import policy
 from .gh import GitHub, GitHubError
+from .workspace import Workspace, WorkspaceError
 
 log = logging.getLogger("github-tool")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -38,11 +43,16 @@ class Config:
             p.strip() for p in os.environ.get("BLOCKED_PATH_PREFIXES", ".github/workflows/").split(",") if p.strip()
         ]
         self.allowed_users = {u.strip() for u in os.environ.get("ALLOWED_OWUI_USER_IDS", "").split(",") if u.strip()}
+        self.workspace_key = os.environ.get("WORKSPACE_API_KEY", "")
+        if self.workspace_key and len(self.workspace_key) < 32:
+            sys.exit("WORKSPACE_API_KEY must be at least 32 characters")
+        self.workspace_root = Path(os.environ.get("WORKSPACE", "/fast/workspace"))
 
 
 cfg = Config()
 http = httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10))
 github = GitHub(http, cfg)
+workspace = Workspace(cfg.workspace_root, cfg.token)
 
 app = FastAPI(title="github-tool", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -55,6 +65,18 @@ def authorize(authorization: str = Header(""), x_owui_user_id: str = Header(""))
     if cfg.allowed_users and x_owui_user_id not in cfg.allowed_users:
         raise HTTPException(403, "this Open WebUI user is not allowed to use the GitHub tool")
     return x_owui_user_id
+
+
+def authorize_workspace(authorization: str = Header("")) -> None:
+    if not cfg.workspace_key:
+        raise HTTPException(503, "workspace endpoints are off: WORKSPACE_API_KEY is not set")
+    if not secrets.compare_digest(authorization.encode(), f"Bearer {cfg.workspace_key}".encode()):
+        raise HTTPException(401, "invalid api key")
+
+
+@app.exception_handler(WorkspaceError)
+async def _workspace_error(request: Request, exc: WorkspaceError):
+    return JSONResponse({"error": "workspace_error", "message": exc.message}, status_code=exc.status)
 
 
 @app.exception_handler(policy.PolicyError)
@@ -179,6 +201,27 @@ async def pull_request(req: PullRequestRequest, user: str = Depends(authorize)):
     result = await github.open_pull_request(owner, repo, req.title, req.body, req.draft, req.requested_by)
     log.info("owui user %s pull request %s/%s: %s", user, owner, repo, result.get("link"))
     return result
+
+
+class CloneRequest(BaseModel):
+    repo: str
+    name: str | None = None
+
+
+class FetchRequest(BaseModel):
+    name: str
+
+
+@app.post("/v1/workspace/clone")
+async def workspace_clone(req: CloneRequest, _: None = Depends(authorize_workspace)):
+    result = await workspace.clone(req.repo, req.name)
+    log.info("cloned %s into /fast/workspace/%s", result["source"], result["name"])
+    return result
+
+
+@app.post("/v1/workspace/fetch")
+async def workspace_fetch(req: FetchRequest, _: None = Depends(authorize_workspace)):
+    return await workspace.fetch(req.name)
 
 
 if __name__ == "__main__":

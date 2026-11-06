@@ -82,6 +82,20 @@ It joins the external `dmz` network as `github-tool`, and Open WebUI reaches it 
 
 Commits are authored as the token's account and carry a `Requested-via: Open WebUI (<user>)` trailer.
 
+## Workspace clones (for the coding-agent runner)
+
+With `WORKSPACE_API_KEY` set and `/fast/workspace` mounted read-write, the sidecar also serves the coding-agent
+runner (not Open WebUI, which doesn't have this key):
+
+| Endpoint | Does |
+|---|---|
+| `POST /v1/workspace/clone` `{"repo": "owner/name" or a GitHub URL, "name"?}` | `git clone` over HTTPS into `/fast/workspace/<name>` (409 if it exists); a failed clone leaves nothing behind |
+| `POST /v1/workspace/fetch` `{"name"}` | `git fetch --prune` from the clone's GitHub repo into `origin/*`; the clone's own remote URL (often SSH) is kept |
+
+Only clone and fetch run, so these endpoints never write to GitHub. The token goes to git as an
+`http.https://github.com/.extraHeader` in the environment, never in a URL, argument or `.git/config`. Run the
+container as UID 1000 so clones belong to the workspace owner.
+
 ## Limits
 
 * Text files only for writes. Content is the whole new file (no patch application).
