@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "languages": {
+    "python": 12
+  },
+  "manifests": [
+    "owui_github/sidecar/Dockerfile",
+    "owui_github/sidecar/requirements.txt",
+    "owui_google_reader/sidecar/Dockerfile",
+    "owui_google_reader/sidecar/requirements.txt"
+  ],
+  "tests": {
+    "dirs": [
+      "owui_github/sidecar/tests",
+      "owui_google_reader/sidecar/tests"
+    ],
+    "commands": [
+      "cd owui_github/sidecar && python3 -m unittest discover -s tests -p 'test_*.py'",
+      "cd owui_google_reader/sidecar && python3 -m unittest discover -s tests -p 'test_*.py'"
+    ],
+    "notes": []
+  },
+  "lint": {
+    "ruff_config": false
+  },
+  "docs": [],
+  "ci": [],
+  "compose": [
+    {
+      "file": "owui_github/docker-compose.yml",
+      "project": "owui_github",
+      "services": {
+        "github-tool": {
+          "container_name": "github-tool",
+          "networks": [
+            "dmz"
+          ],
+          "ports": [],
+          "image": "github-tool:local",
+          "builds": true
+        }
+      },
+      "networks": {
+        "dmz": {
+          "name": "dmz",
+          "external": true,
+          "internal": false
+        }
+      },
+      "env_vars": []
+    },
+    {
+      "file": "owui_google_reader/docker-compose.yml",
+      "project": "owui_google_reader",
+      "services": {
+        "google-reader": {
+          "container_name": "google-reader",
+          "networks": [
+            "dmz"
+          ],
+          "ports": [
+            "${LINK_BIND_ADDR:-0.0.0.0}:${LINK_PORT:-8766}:8001"
+          ],
+          "image": "google-reader:local",
+          "builds": true
+        }
+      },
+      "networks": {
+        "dmz": {
+          "name": "dmz",
+          "external": true,
+          "internal": false
+        }
+      },
+      "env_vars": [
+        "LINK_BIND_ADDR",
+        "LINK_PORT"
+      ]
+    }
+  ],
+  "external_networks": [
+    "dmz"
+  ],
+  "prometheus": [],
+  "errors": []
+}

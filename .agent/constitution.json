@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "id": "R1",
+      "text": "Deliver what the intent asks for plus the edge cases it clearly implies. Do not invent behaviour, rules, configuration knobs, abstractions or refactors beyond it: every new branch of behaviour must map to a contract requirement or decision, and so must every test."
+    },
+    {
+      "id": "R2",
+      "text": "HTTP routes must tolerate query strings: route on the path only (e.g. urllib.parse.urlsplit), for every method and route, including the siblings of the one being changed."
+    },
+    {
+      "id": "R3",
+      "text": "Sibling paths: when a change fixes a pattern in one place, find the same pattern elsewhere in the file or module and fix it too, or report the ones left unchanged."
+    },
+    {
+      "id": "R4",
+      "text": "Use the real names from .agent/facts.json (Docker networks, services, environment variables, scrape targets); never guess them. Known names include the external network dmz, services github-tool and google-reader, and the env vars in each service's .env.example and compose file."
+    },
+    {
+      "id": "R5",
+      "text": "Accept and done_when commands never use git status or git diff: the sandbox runs them on a one-commit snapshot with no history."
+    },
+    {
+      "id": "R6",
+      "text": "Delete __pycache__ directories and other build artifacts before finishing: the runner commits every file left in the worktree."
+    },
+    {
+      "id": "R7",
+      "text": "New tests must fail on the original code and pass on the new code. Test behaviour through public interfaces, not source text or private internals."
+    },
+    {
+      "id": "R8",
+      "text": "Never hold a lock across blocking I/O (network calls, subprocesses, git). This applies to the threading.Lock in owui_google_reader/sidecar/app/store.py and to any new lock."
+    },
+    {
+      "id": "R9",
+      "text": "Never change files under .agent/ (the coder only writes .agent/report.json when asked). Propose constitution changes instead."
+    },
+    {
+      "id": "R10",
+      "text": "Keep secrets out of code, logs and tests; read them from the environment."
+    },
+    {
+      "id": "R11",
+      "text": "owui_github: every non-GET request to GitHub must go through GitHub.req, which calls policy.guard_write. A new write call needs an explicit allow entry in guard_write, an allowed case in sidecar/tests/test_policy.py and a blocked case for the nearest forbidden variant."
+    },
+    {
+      "id": "R12",
+      "text": "owui_github writes may only target cfg.write_branch (WRITE_BRANCH, default dev). Never add code that writes to the default branch, sends force: true, merges a pull request, deletes a ref, or changes repository settings. README.md and policy.py state these limits."
+    },
+    {
+      "id": "R13",
+      "text": "owui_github: every client-supplied file path passes policy.check_path before use. Blocked prefixes from BLOCKED_PATH_PREFIXES (default .github/workflows/) are matched case-insensitively, as tested in test_policy.py."
+    },
+    {
+      "id": "R14",
+      "text": "owui_google_reader: the Google API client in app/google_api.py issues only GET requests. The only POSTs are the OAuth token exchange and refresh and the revoke calls in app/main.py and google_api.py. Any new Google call must be read-only and use a scope from SCOPES (*.readonly)."
+    },
+    {
+      "id": "R15",
+      "text": "owui_google_reader: refresh tokens are stored only Fernet-encrypted via app/store.py, keyed by TOKEN_ENCRYPTION_KEY. Access tokens stay in the in-memory _token_cache. Never write tokens, OAuth codes, state values or PKCE verifiers to logs, API responses or the database in plaintext."
+    },
+    {
+      "id": "R16",
+      "text": "owui_google_reader: keep access logging off for the link server on :8001 (serve() in app/main.py), because link URLs carry OAuth codes and link tokens. Do not enable it or log request URLs on that listener."
+    },
+    {
+      "id": "R17",
+      "text": "Only the google-reader link port (container 8001, published as LINK_BIND_ADDR:LINK_PORT) may be published to the host. The API on :8000 stays on the dmz network only, and github-tool publishes no ports. Do not change compose port mappings without an escalation."
+    },
+    {
+      "id": "R18",
+      "text": "Keep the google-reader hardening in docker-compose.yml: read_only: true, the tmpfs on /tmp, cap_drop ALL and no-new-privileges. Do not weaken these settings."
+    },
+    {
+      "id": "R19",
+      "text": "Each sidecar reads required env vars at startup and exits with a message when one is missing (Config in each main.py). SIDECAR_API_KEY must be at least 32 characters. A new required setting follows the same pattern and is added to that service's .env.example."
+    },
+    {
+      "id": "R20",
+      "text": "Every API route depends on the existing authorization dependency (authorize in owui_github, user_google in owui_google_reader) and keys users by the X-OWUI-User-Id header. The only unauthenticated route is /healthz. New routes follow the same pattern."
+    },
+    {
+      "id": "R21",
+      "text": "Tests live in <service>/sidecar/tests as test_*.py, import the app as 'from app import ...', and run from the sidecar directory with the command in .agent/facts.json tests.commands. Existing tests use pytest.mark.parametrize and pytest.raises, and the READMEs run them with pytest 8.3.4, so use pytest for these files. Tests must not make network calls: test_commit_flow.py uses httpx.MockTransport."
+    },
+    {
+      "id": "R22",
+      "text": "Root-level tool exports (coding_jobs.json, github_dev_branch.json, google_workspace_reader.json, tavily_search.json, weather.json) must stay valid JSON. Their embedded content field must parse as Python with ast.parse. Bump meta.manifest.version only when the task asks for it."
+    },
+    {
+      "id": "R23",
+      "text": "Files under docs/specs/ are the user's specifications. Change them only when the task names them."
+    }
+  ],
+  "protocol": [
+    "Read the task and the constitution from JSON. Write your result as JSON matching the given schema.",
+    "Anything the schema has no field for goes in assumptions or questions. Never act on it silently.",
+    "If the constitution conflicts with the task, the constitution wins; report the conflict in questions.",
+    "In every design session, before proposing work, the PO asks the user whether coding should be time-restricted and which windows to use (US Eastern). A job cannot start without a schedule."
+  ],
+  "allowed_paths": [
+    "**"
+  ],
+  "forbidden_paths": [
+    ".agent/**",
+    ".git/**"
+  ],
+  "limits": {
+    "max_contract_orders": 6,
+    "max_changed_lines_per_order": 300
+  },
+  "escalation_triggers": [
+    "A High or Critical scanner finding that the local reviewer dismissed as a false positive",
+    "A security-category finding where the local reviewer's confidence is below high",
+    "A change that adds network exposure, authentication or authorization logic, a crypto primitive, or deserialization of untrusted input, unless a scanner already confirmed it clean",
+    "Any change to policy.guard_write, policy.check_path, the authorize or user_google dependencies, the OAuth flow in owui_google_reader/sidecar/app/main.py, or compose port mappings"
+  ],
+  "review": {
+    "languages": [
+      "python"
+    ],
+    "ignore_paths": [],
+    "escalation": {
+      "allowed": "zdr-cloud",
+      "monthly_usd": 10,
+      "max_per_job": 3
+    },
+    "egress": {
+      "deps_dev": true,
+      "endoflife_date": true
+    },
+    "blocking": {
+      "security_min_severity": "medium",
+      "cc_max_changed": 15,
+      "diff_coverage_min": 0.7
+    },
+    "architecture": {
+      "import_contracts": []
+    },
+    "schedule": {
+      "dependencies": "weekly",
+      "full": "monthly"
+    }
+  }
+}
