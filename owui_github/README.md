@@ -91,8 +91,9 @@ runner (not Open WebUI, which doesn't have this key):
 |---|---|
 | `POST /v1/workspace/clone` `{"repo": "owner/name" or a GitHub URL, "name"?}` | `git clone` over HTTPS into `/fast/workspace/<name>` (409 if it exists); a failed clone leaves nothing behind |
 | `POST /v1/workspace/fetch` `{"name"}` | `git fetch --prune` from the clone's GitHub repo into `origin/*`; the clone's own remote URL (often SSH) is kept |
+| `POST /v1/workspace/publish` `{"name", "branch"}` | Puts a local branch on `WRITE_BRANCH` (dev): a fast-forward, or a merge commit onto it built without touching the work tree. Never forced; a conflict is a 409 listing the files, and paths under `BLOCKED_PATH_PREFIXES` are refused |
 
-Only clone and fetch run, so these endpoints never write to GitHub. The token goes to git as an
+The only write to GitHub is publish, which, like the API tools, only updates `WRITE_BRANCH`. The token goes to git as an
 `http.https://github.com/.extraHeader` in the environment, never in a URL, argument or `.git/config`. Run the
 container as UID 1000 so clones belong to the workspace owner.
 

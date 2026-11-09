@@ -5,7 +5,7 @@ Holds the GitHub token so Open WebUI never does. Listens on :8000 on the Docker 
 WebUI user id. Reads work on any branch; writes only ever touch WRITE_BRANCH.
 
 With WORKSPACE_API_KEY set, the coding-agent runner (not Open WebUI) can also clone repos into and fetch them in
-/fast/workspace (app/workspace.py), with its own key.
+/fast/workspace, and publish a local branch to WRITE_BRANCH (app/workspace.py), with its own key.
 """
 
 import logging
@@ -52,7 +52,7 @@ class Config:
 cfg = Config()
 http = httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10))
 github = GitHub(http, cfg)
-workspace = Workspace(cfg.workspace_root, cfg.token)
+workspace = Workspace(cfg.workspace_root, cfg.token, cfg.write_branch, tuple(cfg.blocked_prefixes))
 
 app = FastAPI(title="github-tool", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -212,6 +212,11 @@ class FetchRequest(BaseModel):
     name: str
 
 
+class PublishRequest(BaseModel):
+    name: str
+    branch: str
+
+
 @app.post("/v1/workspace/clone")
 async def workspace_clone(req: CloneRequest, _: None = Depends(authorize_workspace)):
     result = await workspace.clone(req.repo, req.name)
@@ -222,6 +227,14 @@ async def workspace_clone(req: CloneRequest, _: None = Depends(authorize_workspa
 @app.post("/v1/workspace/fetch")
 async def workspace_fetch(req: FetchRequest, _: None = Depends(authorize_workspace)):
     return await workspace.fetch(req.name)
+
+
+@app.post("/v1/workspace/publish")
+async def workspace_publish(req: PublishRequest, _: None = Depends(authorize_workspace)):
+    result = await workspace.publish(req.name, req.branch)
+    log.info("published %s of %s to %s: %s (%s)", req.branch, result["source"], result["published_to"],
+             result["commit"], result["how"])
+    return result
 
 
 if __name__ == "__main__":
