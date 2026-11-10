@@ -4,6 +4,6 @@ fastapi
 uvicorn
 httpx
 cryptography
-pypdf
+pypdf==6.21.4   # cooldown waived: 6.21.4 fixes the open pypdf advisories
 python-multipart
 tzdata
