@@ -1,0 +1,9 @@
+# Top-level requirements; requirements.lock is generated from this file by supply_chain/lock.sh in the compose repo
+# (hashes, 14-day release cooldown, malware check). Do not pin versions here unless a library needs it.
+fastapi
+uvicorn
+httpx
+cryptography
+pypdf
+python-multipart
+tzdata
