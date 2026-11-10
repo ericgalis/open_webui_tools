@@ -354,3 +354,31 @@ class GitHub:
             json={"title": title.strip(), "body": full_body, "head": wb, "base": base, "draft": draft},
         )
         return {"created": True, "number": p["number"], "title": p["title"], "base": base, "head": wb, "link": p["html_url"]}
+
+    async def create_issue(self, owner: str, repo: str, title: str, body: str, labels: list[str], parent: int | None,
+                           requested_by: str | None) -> dict:
+        if not title or not title.strip():
+            raise policy.PolicyError("title is required")
+        labels = [check_label(x) for x in labels or []]
+        full_body = (body or "").strip()
+        if requested_by:
+            full_body += f"\n\n---\n_Created via Open WebUI ({requested_by})._"
+        i = await self.req("POST", f"/repos/{owner}/{repo}/issues", json={"title": title.strip(), "body": full_body, "labels": labels})
+        out = {"number": i["number"], "title": i["title"], "link": i["html_url"], "labels": [x["name"] for x in i.get("labels", [])]}
+        if parent is not None:
+            await self.req("POST", f"/repos/{owner}/{repo}/issues/{int(parent)}/sub_issues", json={"sub_issue_id": i["id"]})
+            out["parent"] = int(parent)
+        return out
+
+    async def comment_issue(self, owner: str, repo: str, number: int, body: str, requested_by: str | None) -> dict:
+        if not body or not body.strip():
+            raise policy.PolicyError("body is required")
+        text = body.strip() + (f"\n\n---\n_Posted via Open WebUI ({requested_by})._" if requested_by else "")
+        c = await self.req("POST", f"/repos/{owner}/{repo}/issues/{int(number)}/comments", json={"body": text})
+        return {"link": c["html_url"]}
+
+
+def check_label(value: str) -> str:
+    if not isinstance(value, str) or not 1 <= len(value) <= 50 or "\n" in value:
+        raise policy.PolicyError(f"invalid label: {value!r}")
+    return value

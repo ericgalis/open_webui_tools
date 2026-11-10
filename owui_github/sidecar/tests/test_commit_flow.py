@@ -54,6 +54,11 @@ class FakeGitHub:
             return httpx.Response(200, json={"status": "ahead", "ahead_by": 1, "behind_by": 0, "commits": [], "files": []})
         if (m, p) == ("POST", "/repos/me/proj/pulls"):
             return httpx.Response(201, json={"number": 7, "title": body["title"], "html_url": "https://github.com/me/proj/pull/7"})
+        if (m, p) == ("POST", "/repos/me/proj/issues"):
+            return httpx.Response(201, json={"number": 3, "id": 303, "title": body["title"], "labels": [{"name": n} for n in body["labels"]],
+                                             "html_url": "https://github.com/me/proj/issues/3"})
+        if (m, p) == ("POST", "/repos/me/proj/issues/1/sub_issues"):
+            return httpx.Response(201, json={})
         return httpx.Response(500, json={"message": f"unexpected {m} {p}"})
 
 
@@ -116,3 +121,13 @@ def test_guard_runs_inside_client():
     with pytest.raises(policy.PolicyError):
         run(make(fake).req("PATCH", "/repos/me/proj/git/refs/heads/main", json={"sha": "x", "force": False}))
     assert fake.writes == []
+
+
+def test_issue_created_with_labels_and_linked_to_its_epic():
+    fake = FakeGitHub()
+    res = run(make(fake).create_issue("me", "proj", "Feature", "body", ["type:feature"], 1, "Alice"))
+    assert res["number"] == 3 and res["parent"] == 1 and res["labels"] == ["type:feature"]
+    assert [(m, p) for m, p, _ in fake.writes] == [("POST", "/repos/me/proj/issues"), ("POST", "/repos/me/proj/issues/1/sub_issues")]
+    assert fake.writes[1][2] == {"sub_issue_id": 303}
+    with pytest.raises(policy.PolicyError):
+        run(make(fake).create_issue("me", "proj", " ", "b", [], None, None))

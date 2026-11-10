@@ -14,6 +14,9 @@ WB = "dev"
         ("PATCH", "/repos/o/r/git/refs/heads/dev", {"sha": "x", "force": False}),
         ("POST", "/repos/o/r/pulls", {"head": "dev", "base": "main"}),
         ("POST", "/repos/o/r/pulls", {"head": "o:dev", "base": "main"}),
+        ("POST", "/repos/o/r/issues", {"title": "t", "body": "b", "labels": ["type:epic"]}),
+        ("POST", "/repos/o/r/issues/12/comments", {"body": "b"}),
+        ("POST", "/repos/o/r/issues/12/sub_issues", {"sub_issue_id": 99}),
     ],
 )
 def test_allowed_writes(method, path, body):
@@ -37,6 +40,13 @@ def test_allowed_writes(method, path, body):
         ("PATCH", "/repos/o/r", {"default_branch": "dev"}),
         ("POST", "/user/repos", {"name": "x"}),
         ("POST", "/repos/o/r/merges", {"base": "main", "head": "dev"}),
+        ("POST", "/repos/o/r/issues", {"title": "t", "assignees": ["x"]}),
+        ("PATCH", "/repos/o/r/issues/12", {"state": "closed"}),
+        ("PATCH", "/repos/o/r/issues/12", {"body": "rewritten"}),
+        ("DELETE", "/repos/o/r/issues/12/sub_issue", {}),
+        ("PUT", "/repos/o/r/issues/12/lock", {}),
+        ("POST", "/repos/o/r/issues/12/comments", {"body": "b", "x": 1}),
+        ("POST", "/repos/o/r/issues/abc/comments", {"body": "b"}),
     ],
 )
 def test_blocked_writes(method, path, body):

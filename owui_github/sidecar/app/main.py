@@ -203,6 +203,36 @@ async def pull_request(req: PullRequestRequest, user: str = Depends(authorize)):
     return result
 
 
+class IssueRequest(BaseModel):
+    repo: str
+    title: str
+    body: str = ""
+    labels: list[str] = []
+    parent: int | None = None          # an Epic's issue number: the new issue becomes its sub-issue
+    requested_by: str | None = None
+
+
+class IssueCommentRequest(BaseModel):
+    repo: str
+    number: int
+    body: str
+    requested_by: str | None = None
+
+
+@app.post("/v1/issue")
+async def create_issue(req: IssueRequest, user: str = Depends(authorize)):
+    owner, repo = await github.resolve(req.repo)
+    result = await github.create_issue(owner, repo, req.title, req.body, req.labels, req.parent, req.requested_by)
+    log.info("owui user %s created issue %s/%s#%s", user, owner, repo, result["number"])
+    return result
+
+
+@app.post("/v1/issue/comment")
+async def comment_issue(req: IssueCommentRequest, user: str = Depends(authorize)):
+    owner, repo = await github.resolve(req.repo)
+    return await github.comment_issue(owner, repo, req.number, req.body, req.requested_by)
+
+
 class CloneRequest(BaseModel):
     repo: str
     name: str | None = None
