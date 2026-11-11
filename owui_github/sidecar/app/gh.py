@@ -329,7 +329,8 @@ class GitHub:
             "files": [{"path": c["path"], "action": "delete" if c.get("delete") else "write"} for c in changes],
         }
 
-    async def open_pull_request(self, owner: str, repo: str, title: str, body: str, draft: bool, requested_by: str | None) -> dict:
+    async def open_pull_request(self, owner: str, repo: str, title: str, body: str, draft: bool, requested_by: str | None,
+                                closes: list[int] | None = None) -> dict:
         wb = self.cfg.write_branch
         if not title or not title.strip():
             raise policy.PolicyError("title is required")
@@ -339,13 +340,22 @@ class GitHub:
         existing = await self.req(
             "GET", f"/repos/{owner}/{repo}/pulls", params={"head": f"{owner}:{wb}", "base": base, "state": "open"}
         )
+        lines = [f"Closes #{int(n)}" for n in closes or []]
         if existing:
             p = existing[0]
-            return {"created": False, "number": p["number"], "title": p["title"], "link": p["html_url"], "message": "an open PR from this branch already exists"}
+            out = {"created": False, "number": p["number"], "title": p["title"], "link": p["html_url"], "message": "an open PR from this branch already exists"}
+            missing = [x for x in lines if x not in (p.get("body") or "")]
+            if missing:       # the PR collects the Features built on dev since it was opened
+                await self.req("PATCH", f"/repos/{owner}/{repo}/pulls/{p['number']}",
+                               json={"body": ((p.get("body") or "").rstrip() + "\n" + "\n".join(missing)).strip()})
+                out.update(updated=True, message="an open PR from this branch already exists; added " + ", ".join(missing))
+            return out
         cmp = await self.compare(owner, repo, base, wb)
         if not cmp["ahead_by"]:
             raise policy.PolicyError(f"{wb} has no commits ahead of {base}")
         full_body = (body or "").strip()
+        if lines:
+            full_body += "\n\n" + "\n".join(lines)
         if requested_by:
             full_body += f"\n\n---\n_Opened via Open WebUI ({requested_by})._"
         p = await self.req(

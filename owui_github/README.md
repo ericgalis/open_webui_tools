@@ -107,6 +107,7 @@ Used by the Issues tool (`../issues.json`) and the runner. Open WebUI's key plus
 | `POST /v1/issue/comment` `{"repo", "number", "body"}` | Comments |
 | `GET /v1/issue?repo&number` | The issue, its comments and (for an Epic) its sub-issues |
 | `GET /v1/issues?repo&labels=a,b&state=open&limit=50` | Issues with all the labels, oldest first |
+| `POST /v1/pull-request` `{"repo", "title", "body", "closes": [11, 12]}` | Opens the PR from dev into the default branch with a `Closes #N` line per Feature; if one is already open, adds the missing lines to its body (the only PR edit allowed). Also open to the workspace key |
 | `POST /v1/issue/update` `{"repo", "number", "body"?, "labels"?}` | Replaces the body and/or all labels |
 
 Rules, in the sidecar so a leaked key or a prompt injection cannot go further:

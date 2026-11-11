@@ -15,6 +15,7 @@ class FakeGitHub:
     def __init__(self, dev_exists=False):
         self.refs = {"main": "m1"} | ({"dev": "m1"} if dev_exists else {})
         self.writes = []
+        self.open_prs = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         m, p = request.method, request.url.path
@@ -49,7 +50,9 @@ class FakeGitHub:
             self.refs["dev"] = body["sha"]
             return httpx.Response(200, json={})
         if (m, p) == ("GET", "/repos/me/proj/pulls"):
-            return httpx.Response(200, json=[])
+            return httpx.Response(200, json=self.open_prs)
+        if (m, p) == ("PATCH", "/repos/me/proj/pulls/7"):
+            return httpx.Response(200, json={})
         if m == "GET" and p.startswith("/repos/me/proj/compare/"):
             return httpx.Response(200, json={"status": "ahead", "ahead_by": 1, "behind_by": 0, "commits": [], "files": []})
         if (m, p) == ("POST", "/repos/me/proj/pulls"):
@@ -191,3 +194,17 @@ def test_update_issue_changes_body_and_labels_of_trusted_issues_only():
         with pytest.raises(policy.PolicyError):
             run(make(fake).update_issue("me", "proj", bad["number"], bad["body"], bad["labels"], None))
         assert fake.writes == []
+
+
+def test_pull_request_says_which_features_it_closes_and_collects_later_ones():
+    fake = FakeGitHub()
+    res = run(make(fake).open_pull_request("me", "proj", "Features", "body", False, None, [11, 12]))
+    assert res["created"] and fake.writes[0][2]["body"] == "body\n\nCloses #11\nCloses #12"
+    fake = FakeGitHub()
+    fake.open_prs = [{"number": 7, "title": "t", "html_url": "u", "body": "body\n\nCloses #11"}]
+    res = run(make(fake).open_pull_request("me", "proj", "Features", "", False, None, [11, 13]))
+    assert res["updated"] and not res["created"]
+    assert fake.writes == [("PATCH", "/repos/me/proj/pulls/7", {"body": "body\n\nCloses #11\nCloses #13"})]
+    fake.writes.clear()
+    run(make(fake).open_pull_request("me", "proj", "Features", "", False, None, [11]))
+    assert fake.writes == []            # nothing new to add

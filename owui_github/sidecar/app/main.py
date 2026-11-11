@@ -77,7 +77,7 @@ def authorize_workspace(authorization: str = Header("")) -> None:
 
 
 def authorize_issues(authorization: str = Header(""), x_owui_user_id: str = Header("")) -> str:
-    """Issue endpoints take Open WebUI's key (with a user id) or the runner's workspace key."""
+    """Issue and pull-request endpoints take Open WebUI's key (with a user id) or the runner's workspace key."""
     if cfg.workspace_key and secrets.compare_digest(authorization.encode(), f"Bearer {cfg.workspace_key}".encode()):
         return "runner"
     return authorize(authorization, x_owui_user_id)
@@ -193,6 +193,7 @@ class PullRequestRequest(BaseModel):
     title: str
     body: str = ""
     draft: bool = False
+    closes: list[int] = []             # Feature issue numbers: "Closes #N" lines in the PR body
     requested_by: str | None = None
 
 
@@ -205,9 +206,9 @@ async def commit(req: CommitRequest, user: str = Depends(authorize)):
 
 
 @app.post("/v1/pull-request")
-async def pull_request(req: PullRequestRequest, user: str = Depends(authorize)):
+async def pull_request(req: PullRequestRequest, user: str = Depends(authorize_issues)):
     owner, repo = await github.resolve(req.repo)
-    result = await github.open_pull_request(owner, repo, req.title, req.body, req.draft, req.requested_by)
+    result = await github.open_pull_request(owner, repo, req.title, req.body, req.draft, req.requested_by, req.closes)
     log.info("owui user %s pull request %s/%s: %s", user, owner, repo, result.get("link"))
     return result
 
