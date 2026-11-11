@@ -370,6 +370,84 @@ class GitHub:
             out["parent"] = int(parent)
         return out
 
+    async def trusted_authors(self) -> set[str]:
+        """Who may give the pipeline instructions: the account behind the token (the user, and everything this tool
+        creates), plus TRUSTED_AUTHORS. A public repo lets anyone write issues and comments."""
+        return {(await self.login()).lower(), *(a.lower() for a in getattr(self.cfg, "trusted_authors", ()))}
+
+    async def _issue_view(self, i: dict, trusted: set[str], full: bool) -> dict:
+        author = (i.get("user") or {}).get("login", "")
+        ok = author.lower() in trusted
+        out = {"number": i["number"], "title": i["title"], "state": i["state"], "link": i["html_url"],
+               "labels": [x["name"] for x in i.get("labels", [])], "author": author, "trusted": ok,
+               "updated_at": i.get("updated_at")}
+        parent = i.get("parent_issue_url")
+        out["parent"] = int(parent.rsplit("/", 1)[1]) if parent else None
+        if full:
+            # what an untrusted author wrote is never handed on: the runner and the PO act on this text
+            out["body"] = (i.get("body") or "") if ok else "[hidden: written by an author who is not trusted]"
+        return out
+
+    async def get_issue(self, owner: str, repo: str, number: int) -> dict:
+        trusted = await self.trusted_authors()
+        i = await self.req("GET", f"/repos/{owner}/{repo}/issues/{int(number)}")
+        if "pull_request" in i:
+            raise policy.PolicyError(f"#{number} is a pull request, not an issue")
+        out = await self._issue_view(i, trusted, True)
+        comments = await self.req("GET", f"/repos/{owner}/{repo}/issues/{int(number)}/comments", params={"per_page": 100})
+        out["comments"] = []
+        for c in comments:
+            who = (c.get("user") or {}).get("login", "")
+            ok = who.lower() in trusted
+            out["comments"].append({"id": c["id"], "author": who, "trusted": ok, "created_at": c.get("created_at"),
+                                    "body": c.get("body") or "" if ok else "[hidden: written by an author who is not trusted]"})
+        if (i.get("sub_issues_summary") or {}).get("total"):
+            subs = await self.req("GET", f"/repos/{owner}/{repo}/issues/{int(number)}/sub_issues", params={"per_page": 100})
+            out["sub_issues"] = [await self._issue_view(x, trusted, False) for x in subs]
+        return out
+
+    async def list_issues(self, owner: str, repo: str, labels: list[str], state: str, limit: int) -> list[dict]:
+        """Open (or closed, or all) issues with ALL of the labels, oldest first, from trusted authors only."""
+        if state not in ("open", "closed", "all"):
+            raise policy.PolicyError("state must be open, closed or all")
+        labels = [check_label(x) for x in labels]
+        trusted = await self.trusted_authors()
+        params = {"state": state, "per_page": 100, "sort": "created", "direction": "asc"}
+        if labels:
+            params["labels"] = ",".join(labels)
+        out = []
+        page = 1
+        while len(out) < limit and page <= 5:
+            data = await self.req("GET", f"/repos/{owner}/{repo}/issues", params=params | {"page": page})
+            if not data:
+                break
+            for i in data:
+                if "pull_request" not in i and (i.get("user") or {}).get("login", "").lower() in trusted:
+                    out.append(await self._issue_view(i, trusted, False))
+            page += 1
+        return out[:limit]
+
+    async def update_issue(self, owner: str, repo: str, number: int, body: str | None, labels: list[str] | None,
+                           requested_by: str | None) -> dict:
+        """Change an issue's body and/or replace its labels. Only issues from trusted authors."""
+        if body is None and labels is None:
+            raise policy.PolicyError("nothing to change: give body or labels")
+        trusted = await self.trusted_authors()
+        i = await self.req("GET", f"/repos/{owner}/{repo}/issues/{int(number)}")
+        if "pull_request" in i:
+            raise policy.PolicyError(f"#{number} is a pull request, not an issue")
+        if (i.get("user") or {}).get("login", "").lower() not in trusted:
+            raise policy.PolicyError(f"#{number} was not written by a trusted author; it is not changed")
+        payload = {}
+        if body is not None:
+            if not body.strip():
+                raise policy.PolicyError("body must not be empty")
+            payload["body"] = body.strip()
+        if labels is not None:
+            payload["labels"] = [check_label(x) for x in labels]
+        r = await self.req("PATCH", f"/repos/{owner}/{repo}/issues/{int(number)}", json=payload)
+        return {"number": r["number"], "link": r["html_url"], "labels": [x["name"] for x in r.get("labels", [])]}
+
     async def comment_issue(self, owner: str, repo: str, number: int, body: str, requested_by: str | None) -> dict:
         if not body or not body.strip():
             raise policy.PolicyError("body is required")
@@ -378,7 +456,16 @@ class GitHub:
         return {"link": c["html_url"]}
 
 
+TYPE_LABELS = {"type:epic", "type:feature"}
+STATUS_LABELS = {"status:draft", "status:review", "status:ready", "status:in-progress", "status:in-pr", "status:needs-you"}
+
+
 def check_label(value: str) -> str:
+    """The `type:` and `status:` labels drive the pipeline, so only the known ones exist; other labels are free text."""
     if not isinstance(value, str) or not 1 <= len(value) <= 50 or "\n" in value:
         raise policy.PolicyError(f"invalid label: {value!r}")
+    if value.startswith("type:") and value not in TYPE_LABELS:
+        raise policy.PolicyError(f"unknown label {value!r}; type labels are {sorted(TYPE_LABELS)}")
+    if value.startswith("status:") and value not in STATUS_LABELS:
+        raise policy.PolicyError(f"unknown label {value!r}; status labels are {sorted(STATUS_LABELS)}")
     return value

@@ -44,6 +44,8 @@ class Config:
         ]
         self.allowed_users = {u.strip() for u in os.environ.get("ALLOWED_OWUI_USER_IDS", "").split(",") if u.strip()}
         self.workspace_key = os.environ.get("WORKSPACE_API_KEY", "")
+        # logins besides the token's own whose issues and comments the pipeline may act on (default: none)
+        self.trusted_authors = [a.strip() for a in os.environ.get("TRUSTED_AUTHORS", "").split(",") if a.strip()]
         if self.workspace_key and len(self.workspace_key) < 32:
             sys.exit("WORKSPACE_API_KEY must be at least 32 characters")
         self.workspace_root = Path(os.environ.get("WORKSPACE", "/fast/workspace"))
@@ -72,6 +74,13 @@ def authorize_workspace(authorization: str = Header("")) -> None:
         raise HTTPException(503, "workspace endpoints are off: WORKSPACE_API_KEY is not set")
     if not secrets.compare_digest(authorization.encode(), f"Bearer {cfg.workspace_key}".encode()):
         raise HTTPException(401, "invalid api key")
+
+
+def authorize_issues(authorization: str = Header(""), x_owui_user_id: str = Header("")) -> str:
+    """Issue endpoints take Open WebUI's key (with a user id) or the runner's workspace key."""
+    if cfg.workspace_key and secrets.compare_digest(authorization.encode(), f"Bearer {cfg.workspace_key}".encode()):
+        return "runner"
+    return authorize(authorization, x_owui_user_id)
 
 
 @app.exception_handler(WorkspaceError)
@@ -220,7 +229,7 @@ class IssueCommentRequest(BaseModel):
 
 
 @app.post("/v1/issue")
-async def create_issue(req: IssueRequest, user: str = Depends(authorize)):
+async def create_issue(req: IssueRequest, user: str = Depends(authorize_issues)):
     owner, repo = await github.resolve(req.repo)
     result = await github.create_issue(owner, repo, req.title, req.body, req.labels, req.parent, req.requested_by)
     log.info("owui user %s created issue %s/%s#%s", user, owner, repo, result["number"])
@@ -228,9 +237,37 @@ async def create_issue(req: IssueRequest, user: str = Depends(authorize)):
 
 
 @app.post("/v1/issue/comment")
-async def comment_issue(req: IssueCommentRequest, user: str = Depends(authorize)):
+async def comment_issue(req: IssueCommentRequest, user: str = Depends(authorize_issues)):
     owner, repo = await github.resolve(req.repo)
     return await github.comment_issue(owner, repo, req.number, req.body, req.requested_by)
+
+
+class IssueUpdateRequest(BaseModel):
+    repo: str
+    number: int
+    body: str | None = None            # replaces the whole body
+    labels: list[str] | None = None    # replaces all labels
+    requested_by: str | None = None
+
+
+@app.get("/v1/issue")
+async def get_issue(repo: str, number: int, user: str = Depends(authorize_issues)):
+    return await github.get_issue(*await github.resolve(repo), number)
+
+
+@app.get("/v1/issues")
+async def list_issues(repo: str, labels: str = "", state: str = "open", limit: int = Query(50, ge=1, le=200),
+                      user: str = Depends(authorize_issues)):
+    found = await github.list_issues(*await github.resolve(repo), [x for x in labels.split(",") if x], state, limit)
+    return {"results": found}
+
+
+@app.post("/v1/issue/update")
+async def update_issue(req: IssueUpdateRequest, user: str = Depends(authorize_issues)):
+    owner, repo = await github.resolve(req.repo)
+    result = await github.update_issue(owner, repo, req.number, req.body, req.labels, req.requested_by)
+    log.info("%s updated issue %s/%s#%s", user, owner, repo, req.number)
+    return result
 
 
 class CloneRequest(BaseModel):
