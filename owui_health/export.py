@@ -1,4 +1,4 @@
-"""Write the Open WebUI import files (../health_data.json, ../food_log.json) from the tool sources here.
+"""Write the Open WebUI import files (../health_data.json) from the tool sources here.
 Run after every change to a tool: python3 owui_health/export.py"""
 
 import json
@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TOOLS = {"health_data": "health_data.py", "food_log": "food_log.py"}
+TOOLS = {"health_data": "health_data.py"}
 
 
 def frontmatter(src: str) -> dict:
