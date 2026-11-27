@@ -471,7 +471,7 @@ class GitHub:
 
 
 TYPE_LABELS = {"type:epic", "type:feature"}
-STATUS_LABELS = {"status:draft", "status:review", "status:ready", "status:in-progress", "status:in-pr", "status:needs-you"}
+STATUS_LABELS = {"status:draft", "status:review", "status:ready", "status:in-progress", "status:in-pr", "status:needs-you", "status:done"}
 
 
 def check_label(value: str) -> str:

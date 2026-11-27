@@ -187,9 +187,12 @@ def test_update_issue_changes_body_and_labels_of_trusted_issues_only():
     res = run(make(fake).update_issue("me", "proj", 4, " new body ", ["type:feature", "status:ready"], "runner"))
     assert res["labels"] == ["type:feature", "status:ready"]
     assert fake.writes == [("PATCH", "/repos/me/proj/issues/4", {"body": "new body", "labels": ["type:feature", "status:ready"]})]
+    fake = FakeGitHub()
+    run(make(fake).update_issue("me", "proj", 4, None, ["type:feature", "status:done"], "runner"))      # set by the runner after the merge
+    assert fake.writes[0][2]["labels"] == ["type:feature", "status:done"]
     for bad in (dict(number=99, body="x", labels=None), dict(number=77, body="x", labels=None),
                 dict(number=4, body=None, labels=None), dict(number=4, body="  ", labels=None),
-                dict(number=4, body=None, labels=["status:done"])):
+                dict(number=4, body=None, labels=["status:bogus"])):
         fake = FakeGitHub()
         with pytest.raises(policy.PolicyError):
             run(make(fake).update_issue("me", "proj", bad["number"], bad["body"], bad["labels"], None))

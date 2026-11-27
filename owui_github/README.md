@@ -113,7 +113,7 @@ Used by the Issues tool (`../issues.json`) and the runner. Open WebUI's key plus
 Rules, in the sidecar so a leaked key or a prompt injection cannot go further:
 
 - **Trust.** Only issues and comments written by the account behind the token (plus `TRUSTED_AUTHORS`, default none) are handed on. On a public repo anyone can write an issue; their text is replaced by a placeholder, they do not appear in lists, and they cannot be updated.
-- **Labels.** `type:epic`, `type:feature` and `status:draft|review|ready|in-progress|in-pr|needs-you` are the only `type:` and `status:` labels; others are free text.
+- **Labels.** `type:epic`, `type:feature` and `status:draft|review|ready|in-progress|in-pr|needs-you|done` are the only `type:` and `status:` labels; others are free text.
 - **No closing.** The sidecar never closes, reopens, retitles, assigns, locks, transfers or deletes an issue; merging a PR that says `Closes #N` closes it.
 
 ## Limits
