@@ -61,7 +61,7 @@ def guard_write(method: str, path: str, body: dict | None, write_branch: str) ->
             and rest == "/pulls"
             and body.get("head") in (write_branch, f"{m.group('owner')}:{write_branch}")
         )
-        or (method == "PATCH" and re.fullmatch(r"/pulls/\d+", rest) is not None and set(body) == {"body"})
+        or (method == "PATCH" and re.fullmatch(r"/pulls/\d+", rest) is not None and "body" in body and set(body) <= {"body", "title"})
         or (method == "POST" and rest == "/issues" and set(body) <= {"title", "body", "labels"})
         or (method == "PATCH" and re.fullmatch(r"/issues/\d+", rest) is not None and body and set(body) <= {"body", "labels"})
         or (method == "POST" and re.fullmatch(r"/issues/\d+/comments", rest) is not None and set(body) <= {"body"})

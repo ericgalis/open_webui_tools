@@ -345,9 +345,13 @@ class GitHub:
             p = existing[0]
             out = {"created": False, "number": p["number"], "title": p["title"], "link": p["html_url"], "message": "an open PR from this branch already exists"}
             missing = [x for x in lines if x not in (p.get("body") or "")]
-            if missing:       # the PR collects the Features built on dev since it was opened
-                await self.req("PATCH", f"/repos/{owner}/{repo}/pulls/{p['number']}",
-                               json={"body": ((p.get("body") or "").rstrip() + "\n" + "\n".join(missing)).strip()})
+            if missing:       # the PR collects the Features built on dev since it was opened, each with its own section
+                section = (body or "").strip()
+                add = (section + "\n\n" if section and section not in (p.get("body") or "") else "") + "\n".join(missing)
+                patch = {"body": ((p.get("body") or "").rstrip() + ("\n\n" if section else "\n") + add).strip()}
+                if (p.get("title") or "").startswith("Feature #"):          # it was named for its first Feature
+                    patch["title"] = "Features built by the local coder"
+                await self.req("PATCH", f"/repos/{owner}/{repo}/pulls/{p['number']}", json=patch)
                 out.update(updated=True, message="an open PR from this branch already exists; added " + ", ".join(missing))
             return out
         cmp = await self.compare(owner, repo, base, wb)

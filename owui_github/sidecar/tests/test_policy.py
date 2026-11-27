@@ -19,6 +19,7 @@ WB = "dev"
         ("PATCH", "/repos/o/r/issues/12", {"body": "ticked", "labels": ["status:in-progress"]}),
         ("PATCH", "/repos/o/r/issues/12", {"labels": ["status:in-pr"]}),
         ("PATCH", "/repos/o/r/pulls/3", {"body": "Closes #1"}),
+        ("PATCH", "/repos/o/r/pulls/3", {"body": "Closes #1", "title": "Features built by the local coder"}),
         ("POST", "/repos/o/r/issues/12/sub_issues", {"sub_issue_id": 99}),
     ],
 )

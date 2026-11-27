@@ -208,3 +208,13 @@ def test_pull_request_says_which_features_it_closes_and_collects_later_ones():
     fake.writes.clear()
     run(make(fake).open_pull_request("me", "proj", "Features", "", False, None, [11]))
     assert fake.writes == []            # nothing new to add
+
+
+def test_a_later_feature_adds_its_own_section_to_the_open_pull_request():
+    fake = FakeGitHub()
+    fake.open_prs = [{"number": 7, "title": "Feature #11: Allowlist", "html_url": "u",
+                      "body": "## Feature #11: Allowlist\n\nDone.\n\nCloses #11"}]
+    run(make(fake).open_pull_request("me", "proj", "Feature #12: Pin", "## Feature #12: Pin\n\nAlso done.", False, None, [12]))
+    assert fake.writes == [("PATCH", "/repos/me/proj/pulls/7", {
+        "body": "## Feature #11: Allowlist\n\nDone.\n\nCloses #11\n\n## Feature #12: Pin\n\nAlso done.\n\nCloses #12",
+        "title": "Features built by the local coder"})]
